@@ -36,7 +36,7 @@ export class App extends React.Component<{}, AppState> {
                 <h1>Start App</h1>
                 <div>
                     <form onSubmit={this.handleSubmit}>
-                        <input value={this.newMessage} type="text" onChange={this.handleChange} />
+                        <input type="text" onChange={this.handleChange} />
                         <input type="submit" value="Send message" />
                     </form>
                 </div>
