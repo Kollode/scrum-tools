@@ -14,7 +14,7 @@ app.get("/", (req, res) => {
   res.send();
 });
 
-const server = app.listen(8080, function() {
+const server = app.listen(8080, function () {
   console.log("Started server under `http://localhost:8080`");
 });
 

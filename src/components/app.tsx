@@ -1,45 +1,54 @@
 import * as React from "react";
 import * as socketClient from "socket.io-client";
-
+import { Query } from 'react-apollo';
+import gql from 'graphql-tag';
 import * as QRCode from "qrcode.react";
+import ApolloClient from "apollo-boost";
+import { ApolloProvider } from "react-apollo";
+import * as fetch from "isomorphic-fetch";
+
 import Button from "@material-ui/core/Button";
 import Input from "@material-ui/core/Input";
 import Paper from "@material-ui/core/Paper";
 import Typography from "@material-ui/core/Typography";
 
-export interface AppState {
-  messages: string[];
-  newMessage: string;
-}
+const GET_MESSAGES = gql`
+  query {
+    messages @client
+  }
+`;
 
-export class App extends React.Component<{}, AppState> {
+const client = new ApolloClient({
+  clientState: {
+    defaults: {
+      messages: [],
+    },
+    resolvers: {}
+  },
+  fetch
+});
+
+export class App extends React.Component<{}, {}> {
   private websocket: SocketIOClient.Socket;
 
   private newMessage: string = "Insert message";
 
   constructor(props: object) {
     super(props);
-    this.state = {
-      messages: [],
-      newMessage: ""
-    };
-
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
   }
   public componentDidMount() {
     this.websocket = socketClient();
     this.websocket.on("reciveMessage", (message: string) => {
-      this.setState(prevState => ({
-        ...prevState,
-        messages: [...this.state.messages, message]
-      }));
+      const currentMessages: { messages: string[] } = client.readQuery({ query: GET_MESSAGES });
+      client.writeData({ data: { messages: [...currentMessages.messages, message] } })
     });
   }
 
   public render() {
     return (
-      <>
+      <ApolloProvider client={client} >
         <h1>Start App</h1>
         <QRCode value="http://192.168.39.169:8080" />
         <div>
@@ -51,16 +60,22 @@ export class App extends React.Component<{}, AppState> {
           </form>
         </div>
         Messages:
-        <div>
-          {this.state.messages.map((message, index) => {
+        <Query query={GET_MESSAGES}>
+          {(result) => {
             return (
-              <Paper>
-                <Typography component="p">{message}</Typography>
-              </Paper>
-            );
-          })}
-        </div>
-      </>
+              <div>
+                {!result.loading && result.data.messages && result.data.messages.map((message: string, index: number) => {
+                  return (
+                    <Paper key={index}>
+                      <Typography component="p">{message}</Typography>
+                    </Paper>
+                  );
+                })}
+              </div>
+            )
+          }}
+        </Query>
+      </ApolloProvider>
     );
   }
 
