@@ -1,11 +1,9 @@
 import * as React from "react";
 import * as socketClient from "socket.io-client";
-import { Query } from 'react-apollo';
-import gql from 'graphql-tag';
+import { ApolloClient } from "apollo-boost";
+import { Query, withApollo } from "react-apollo";
+import gql from "graphql-tag";
 import * as QRCode from "qrcode.react";
-import ApolloClient from "apollo-boost";
-import { ApolloProvider } from "react-apollo";
-import * as fetch from "isomorphic-fetch";
 
 import Button from "@material-ui/core/Button";
 import Input from "@material-ui/core/Input";
@@ -18,22 +16,22 @@ const GET_MESSAGES = gql`
   }
 `;
 
-const client = new ApolloClient({
-  clientState: {
-    defaults: {
-      messages: [],
-    },
-    resolvers: {}
-  },
-  fetch
-});
+const GET_CONFIG = gql`
+  query {
+    config @client
+  }
+`;
 
-export class App extends React.Component<{}, {}> {
+export interface AppProps {
+  client: ApolloClient<any>;
+}
+
+class App extends React.Component<AppProps, {}> {
   private websocket: SocketIOClient.Socket;
 
   private newMessage: string = "Insert message";
 
-  constructor(props: object) {
+  constructor(props: AppProps) {
     super(props);
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -41,14 +39,22 @@ export class App extends React.Component<{}, {}> {
   public componentDidMount() {
     this.websocket = socketClient();
     this.websocket.on("reciveMessage", (message: string) => {
-      const currentMessages: { messages: string[] } = client.readQuery({ query: GET_MESSAGES });
-      client.writeData({ data: { messages: [...currentMessages.messages, message] } })
+      const currentMessages: {
+        messages: string[];
+      } = this.props.client.readQuery({
+        query: GET_MESSAGES
+      });
+      this.props.client.writeData({
+        data: { messages: [...currentMessages.messages, message] }
+      });
     });
+
+    console.log("Config", this.props.client.readQuery({ query: GET_CONFIG }));
   }
 
   public render() {
     return (
-      <ApolloProvider client={client} >
+      <>
         <h1>Start App</h1>
         <QRCode value="http://192.168.39.169:8080" />
         <div>
@@ -61,21 +67,23 @@ export class App extends React.Component<{}, {}> {
         </div>
         Messages:
         <Query query={GET_MESSAGES}>
-          {(result) => {
+          {result => {
             return (
               <div>
-                {!result.loading && result.data.messages && result.data.messages.map((message: string, index: number) => {
-                  return (
-                    <Paper key={index}>
-                      <Typography component="p">{message}</Typography>
-                    </Paper>
-                  );
-                })}
+                {!result.loading &&
+                  result.data.messages &&
+                  result.data.messages.map((message: string, index: number) => {
+                    return (
+                      <Paper key={index}>
+                        <Typography component="p">{message}</Typography>
+                      </Paper>
+                    );
+                  })}
               </div>
-            )
+            );
           }}
         </Query>
-      </ApolloProvider>
+      </>
     );
   }
 
@@ -88,3 +96,5 @@ export class App extends React.Component<{}, {}> {
     this.websocket.emit("sendMessage", this.newMessage);
   }
 }
+
+export default withApollo(App);

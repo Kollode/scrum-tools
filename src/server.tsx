@@ -1,57 +1,40 @@
 import * as express from "express";
 import { renderToString } from "react-dom/server";
 import * as React from "react";
-import { App } from "./components/app";
-import * as io from "socket.io";
+import { ApolloProvider } from "react-apollo";
+import * as dotenv from "dotenv";
+
+import App from "./components/app";
+import { apolloClient } from "./state/apollo-client";
+import { htmlTemplate } from "./server/html-template";
+import { initializeWebsocket } from "./server/websocket";
 
 const app = express();
+dotenv.config();
 
 app.use(express.static("dist"));
 
 app.get("/", (req, res) => {
+  apolloClient.writeData({ data: { config: "TestFromServer" } });
+
+  const ServerApp = (
+    <ApolloProvider client={apolloClient}>
+      <App client={apolloClient} />
+    </ApolloProvider>
+  );
+
   res.writeHead(200, { "Content-Type": "text/html" });
-  res.end(htmlTemplate(renderToString(React.createElement(App))));
+  res.end(
+    htmlTemplate(renderToString(ServerApp), {
+      apolloState: apolloClient.extract()
+    })
+  );
   res.send();
 });
 
-const server = app.listen(8080, function () {
-  console.log("Started server under `http://localhost:8080`");
+const post = process.env.PORT || 8080;
+const server = app.listen(post, function() {
+  console.log(`Started server under 'http://localhost:${post}'`);
 });
 
-const websocketServer = io(server);
-websocketServer.on("connection", socket => {
-  const clientId = socket.id;
-  socket.on("disconnect", () => {
-    console.log("a user left", clientId);
-    websocketServer.emit("reciveMessage", `Client ${clientId} left`);
-  });
-
-  socket.on("sendMessage", message => {
-    console.log("Got message from client", message);
-    websocketServer.emit("reciveMessage", `Client ${clientId}: ${message}`);
-  });
-
-  console.log("a user connected", clientId);
-  websocketServer.emit("reciveMessage", `Client ${clientId} joined`);
-});
-
-function htmlTemplate(reactMarkup: string) {
-  return `
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="utf-8" />
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>React Example</title>
-                <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500">
-                <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-                <meta
-  name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width, shrink-to-fit=no"/>
-            </head>
-            <body>
-               <div id="app">${reactMarkup}</div>
-               <script src="/js/client.bundle.js" defer></script>
-            </bod>
-        </html>
-    `;
-}
+initializeWebsocket(server);
